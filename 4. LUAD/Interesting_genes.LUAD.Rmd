@@ -1,0 +1,146 @@
+Genes with FC > 5 or FC < -5:
+```{r}
+print(interesting_genes_5)
+```
+
+```{r}
+library(biomaRt)
+
+mart = useMart("ensembl")
+ensembl = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+# Ensemble gen names
+genes_table = getBM(filters = "ensembl_gene_id", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = interesting_genes_5, 
+                     mart = ensembl)
+
+print(genes_table)
+```
+
+Genes with FC < -5.5:
+```{r}
+interesting_genes_FCunder5 = rownames(subset(df_FoldChange_ohne_NA, V1 < -5))
+
+
+library(biomaRt)
+
+mart = useMart("ensembl")
+ensembl = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+# Abrufen von Geninformationen für die Ensemble-Gennamen
+genes_table_FCunder5 = getBM(filters = "ensembl_gene_id", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = interesting_genes_FCunder5, 
+                     mart = ensembl)
+
+print(genes_table_FCunder5)
+```
+Genes with FC > 5.5:
+```{r}
+interesting_genes_FCover5 = rownames(subset(df_FoldChange_ohne_NA, V1 > 5))
+
+
+library(biomaRt)
+
+mart = useMart("ensembl")
+ensembl = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+# Abrufen von Geninformationen für die Ensemble-Gennamen
+genes_table_FCover5 = getBM(filters = "ensembl_gene_id", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = interesting_genes_FCover5, 
+                     mart = ensembl)
+
+print(genes_table_FCover5)
+```
+
+Looking for pathways (FC < -5 or FC > 5)
+```{r}
+#BiocManager::install("clusterProfiler", version = "3.18")
+#BiocManager::install("pathview")
+#BiocManager::install("enrichplot")
+
+library(clusterProfiler)
+library(enrichplot)
+library(org.Hs.eg.db)
+
+organism = "org.Hs.eg.db"
+
+# Pathway-Analysis
+pw = enrichGO(gene = interesting_genes_5,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.2)
+
+dotplot(pw)
+```
+
+Looking for pathways (FC < -3 or FC > 3)
+```{r}
+interesting_genes_3 = rownames(subset(df_FoldChange_ohne_NA, V1 > 3 | V1 < -3))
+
+organism = "org.Hs.eg.db"
+
+# Pathway-Analysis
+pw2 = enrichGO(gene = interesting_genes_3,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(pw2)
+```
+Looking for pathways (FC > 3)
+```{r}
+interesting_genes_FCover3 = rownames(subset(df_FoldChange_ohne_NA, V1 > 3))
+
+organism = "org.Hs.eg.db"
+
+# Pathway-Analysis
+pw_3over = enrichGO(gene = interesting_genes_FCover3,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(pw_3over)
+```
+Looking for pathways (FC < -3)
+```{r}
+interesting_genes_FCunder3 = rownames(subset(df_FoldChange_ohne_NA, V1 < -3))
+
+organism = "org.Hs.eg.db"
+
+# Pathway-Analysis
+pw_3under = enrichGO(gene = interesting_genes_FCunder3,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(pw_3under)
+```
+
+
+```{r}
+mart = useMart("ensembl")
+ensembl = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+# Ensemble gen names
+genes_table_links = getBM(filters = "ensembl_gene_id", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = interesting_genes_links, 
+                     mart = ensembl)
+
+print(genes_table_links)
+
+genes_table_rechts = getBM(filters = "ensembl_gene_id", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = interesting_genes_rechts, 
+                     mart = ensembl)
+
+print(genes_table_rechts)
+```
+

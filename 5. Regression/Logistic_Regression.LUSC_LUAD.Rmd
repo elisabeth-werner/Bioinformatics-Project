@@ -1,0 +1,421 @@
+# LUSC vs LUAD
+
+Extraction of expression data from pancancer data set according to cancer type abbreviation:
+
+```{r}
+library(dplyr)
+LUSC_annot = tcga_annot %>% filter(cancer_type_abbreviation == "LUSC")
+LUSC_patients = LUSC_annot$sample
+LUSC_exp = tcga_exp_proteins_shortened[, colnames(tcga_exp_proteins_shortened) %in% LUSC_patients, drop = F]
+
+LUAD_annot = tcga_annot %>% filter(cancer_type_abbreviation == "LUAD")
+LUAD_patients = LUAD_annot$sample
+LUAD_exp = tcga_exp_proteins_shortened[, colnames(tcga_exp_proteins_shortened) %in% LUAD_patients, drop = F]
+
+t_LUAD_exp = as.data.frame(t(LUAD_exp))
+t_LUSC_exp = as.data.frame(t(LUSC_exp))
+
+LUSC_LUAD_exp = rbind(t_LUAD_exp, t_LUSC_exp)
+```
+
+We extracted and combined LUSC (498 patients) und LUAD (515 patients) expression data into one bigger dataframe containing their expression values.
+
+Now we perform logistic regression based on pathway activity:
+
+First we add a label to distinguish between the two types of tumor. LUAD will be 1 and LUSC will be 0:
+
+```{r}
+# gsva_es_comb_ll is a matrix containing enrichment scores based an gsva performed on those two tumor types. 
+t_gsva_es_comb_ll = as.data.frame(t(gsva_es_comb_ll))
+t_gsva_es_comb_ll$Label <- NA
+
+# Label LUAD
+t_gsva_es_comb_ll[rownames(t_gsva_es_comb_ll) %in% LUAD_patients, "Label"] <- 1
+
+# Label LUSC
+t_gsva_es_comb_ll[rownames(t_gsva_es_comb_ll) %in% LUSC_patients, "Label"] <- 0
+```
+
+Pathways with high variance are stored and selected for the first regression model:
+
+```{r}
+variances_gsva <- apply(t(gsva_es_comb_ll), 2, var)
+top_variances_gsva <- head(sort(variances_gsva, decreasing = TRUE), 30)
+selected_variant_pathways = names(top_variances_gsva)
+```
+
+Logistic regression is carried out:
+
+```{r}
+# Preparing data: 
+
+# creating a df with selected pathways based on variance
+
+df_selected <- gsva_es_comb_ll[rownames(gsva_es_comb_ll) %in% selected_variant_pathways, ]
+
+t_df_selected = as.data.frame(t(df_selected))
+
+
+t_df_selected$Label <- NA
+# Label LUAD
+t_df_selected[rownames(t_df_selected) %in% LUAD_patients, "Label"] <- 1
+# Label LUSC
+t_df_selected[rownames(t_df_selected) %in% LUSC_patients, "Label"] <- 0
+
+
+# splitting the df into test and training data
+library(caret)
+set.seed(123) 
+train_index_LUSC_LUAD_2 = createDataPartition(t_df_selected$Label, p = 0.8, list = F) # 60% for training-df
+train_data_ll_2 = t_df_selected[train_index_LUSC_LUAD_2, ]
+test_data_ll_2 = t_df_selected[-train_index_LUSC_LUAD_2, ]
+test_data_model_ll_2 = test_data_ll_2[, !colnames(test_data_ll_2) %in% "Label"]
+
+
+# logistic regression:
+
+model_ll_2 = glm(Label ~ ., data = train_data_ll_2, family = binomial(link = "logit"))
+
+# making predictions
+predictions_ll_2 = predict(model_ll_2, newdata = test_data_model_ll_2, type = "response")
+
+threshold_ll_2 = 0.7
+predicted_labels_ll_2 = ifelse(predictions_ll_2 > threshold_ll_2, 1, 0)
+accuracy_ll_2 = mean(predicted_labels_ll_2 == test_data_ll_2$Label)
+```
+
+Now, backward selection is used to select for pathways to improve the initial model:
+
+```{r}
+backwardsmodel <- step(model_ll_2, direction = "backward")
+```
+
+```{r}
+#HALLMARK_E2F_TARGETS + HALLMARK_G2M_CHECKPOINT + HALLMARK_MITOTIC_SPINDLE + 
+    #HALLMARK_MTORC1_SIGNALING + HALLMARK_MYC_TARGETS_V1 + HALLMARK_NOTCH_SIGNALING + 
+    #HALLMARK_OXIDATIVE_PHOSPHORYLATION + HALLMARK_PROTEIN_SECRETION + 
+   # HALLMARK_UNFOLDED_PROTEIN_RESPONSE + HALLMARK_WNT_BETA_CATENIN_SIGNALING + 
+  #  CSR_EARLY_UP.V1_UP + E2F1_UP.V1_UP + EIF4E_DN + RPS14_DN.V1_DN + 
+  #  STK33_NOMO_UP + TBK1.DF_DN + TBK1.DN.48HRS_DN + VEGF_A_UP.V1_DN
+
+
+selected_selected_pathways = c("HALLMARK_E2F_TARGETS", "HALLMARK_G2M_CHECKPOINT", "HALLMARK_MITOTIC_SPINDLE", "HALLMARK_MTORC1_SIGNALING", "HALLMARK_MYC_TARGETS_V1", "HALLMARK_NOTCH_SIGNALING", "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "HALLMARK_PROTEIN_SECRETION", "HALLMARK_UNFOLDED_PROTEIN_RESPONSE", "HALLMARK_WNT_BETA_CATENIN_SIGNALING", "CSR_EARLY_UP.V1_UP", "E2F1_UP.V1_UP", "EIF4E_DN", "RPS14_DN.V1_DN", "STK33_NOMO_UP", "TBK1.DF_DN", "TBK1.DN.48HRS_DN", "VEGF_A_UP.V1_DN")
+
+selected_selected_pathways = c("HALLMARK_MITOTIC_SPINDLE", "HALLMARK_MTORC1_SIGNALING", "HALLMARK_NOTCH_SIGNALING", "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "HALLMARK_PROTEIN_SECRETION", "HALLMARK_WNT_BETA_CATENIN_SIGNALING", "E2F1_UP.V1_UP", "EIF4E_DN", "RPS14_DN.V1_DN", "STK33_NOMO_UP", "TBK1.DF_DN", "TBK1.DN.48HRS_DN", "VEGF_A_UP.V1_DN")
+```
+
+The final logistic regression model:
+
+```{r}
+df_selected_selected <- gsva_es_comb_ll[rownames(gsva_es_comb_ll) %in% selected_selected_pathways, ]
+
+t_df_selected_selected = as.data.frame(t(df_selected_selected))
+
+
+t_df_selected_selected$Label <- NA
+
+# Label LUAD
+t_df_selected_selected[rownames(t_df_selected_selected) %in% LUAD_patients, "Label"] <- 1
+# Label LUSC
+t_df_selected_selected[rownames(t_df_selected_selected) %in% LUSC_patients, "Label"] <- 0
+
+
+# splitting the df into test and training data
+set.seed(123) 
+train_index_LUSC_LUAD_4 = createDataPartition(t_df_selected_selected$Label, p = 0.8, list = F) # 80% for training-df
+train_data_ll_4 = t_df_selected_selected[train_index_LUSC_LUAD_4, ]
+test_data_ll_4 = t_df_selected_selected[-train_index_LUSC_LUAD_4, ]
+test_data_model_ll_4 = test_data_ll_4[, !colnames(test_data_ll_4) %in% "Label"]
+
+
+# logistic regression
+model_ll_4 = glm(Label ~ ., data = train_data_ll_4, family = binomial(link = "logit"))
+
+# making predictions
+predictions_ll_4 = predict(model_ll_4, newdata = test_data_model_ll_4, type = "response")
+
+threshold_ll_4 = 0.5
+predicted_labels_ll_4 = ifelse(predictions_ll_4 > threshold_ll_4, 1, 0)
+accuracy_ll_4 = mean(predicted_labels_ll_4 == test_data_ll_4$Label)
+```
+
+Here, a confusion matrix is created:
+
+```{r}
+confusion_matrix_LL <- table(predicted_labels_ll_4, test_data_ll_4$Label)
+confusion_matrix_LL
+```
+plotting confusion matrix
+```{r}
+#install.packages("cvms")
+
+data_eval = data.frame(
+  "predictions" = predicted_labels_ll_4, 
+  "target" = test_data_ll_4$Label
+)
+
+library(cvms)
+eval <- evaluate(
+  data = data_eval,
+  target_col = "target",
+  prediction_cols = "predictions",
+  type = "binomial"
+)
+
+
+plot_confusion_matrix(eval)
+
+plot_confusion_matrix(eval$`Confusion Matrix`[[1]],
+                      add_sums = T)
+```
+
+
+
+```{r}
+# Extraction of relevant values from the confusion matrix 
+TN <- confusion_matrix_LL[1, 1]  # True Negatives
+FP <- confusion_matrix_LL[2, 1]  # False Positives
+FN <- confusion_matrix_LL[1, 2]  # False Negatives
+TP <- confusion_matrix_LL[2, 2]  # True Positives
+
+accuracy_ll_4 <- (TP + TN) / (TP + TN + FP + FN)  # Accuracy
+FNR <- FN / (FN + TP)  # False-Negative Rate
+FPR <- FP / (FP + TN)  # False-Positive Rate
+TPR <- TP / (TP + FN)  # True-Positive Rate (Recall)
+
+# printing results
+cat("Accuracy: ", accuracy_ll_4, "\n")
+cat("False-Negative Rate: ", FNR, "\n")
+cat("False-Positive Rate: ", FPR, "\n")
+cat("True-Positive Rate (Recall): ", TPR, "\n")
+```
+
+# Statistical tests, to evaluate the model
+
+Waldtest:
+```{r}
+library(lmtest)
+wald_test <- summary(model_ll_4)$coefficients[, c("Estimate", "Std. Error", "z value", "Pr(>|z|)")]
+wald_test
+```
+All coefficients are significant (p < 0.05).
+
+
+McFadden's pseudo R^2 test:
+```{r}
+logLik_full <- logLik(model_ll_4)
+
+# Null-Modell anpassen und Log-Likelihood berechnen
+null_model <- glm(Label ~ 1, data = train_data_ll_4, family = "binomial")
+logLik_null <- logLik(null_model)
+
+# McFadden's pseudo R^2 berechnen
+McFadden_R2 <- 1 - (logLik_full / logLik_null)
+McFadden_R2
+```
+McFadden’s pseudo-R2 = 0.7075055 meaning that the model is able to explain 70.75% of the variance. 
+
+
+Deviance test:
+```{r}
+deviance_test <- anova(null_model, model_ll_4, test = "LRT")
+deviance_test
+```
+
+
+Chi-squared test:
+```{r}
+chi_sq_test <- chisq.test(confusion_matrix_LL)
+chi_sq_test
+```
+The values 2.2e-16 indicates, that the model is significantly better than a random model in predicting the tumor type. 
+
+
+# ROC-curve
+
+```{r}
+#install.packages("ISLR")
+library(ISLR)
+library(ROCR)
+
+# Load a binary classification dataset from ISLR package
+t_df_selected_selected <- ISLR::Default
+# Plot ROC curve
+pred  <- prediction(predictions_ll_4, test_data_ll_4$Label)
+roc_curve <- performance(pred, "tpr", "fpr")
+
+perf <- performance(pred,"auc")
+auc <- as.numeric(perf@y.values)
+
+#plot(roc_curve, col = "dodgerblue3", main = "ROC Curve", lwd = 2)
+#abline(0, 1, col = "black", lty = 2, lwd = 1.5)
+#text(0.5, 0.3, paste("AUC = ", round(auc, 4)), adj = c(0.5, 0.5), col = "black", cex = 0.9)
+
+library(ggplot2)
+roc_df <- data.frame(
+  FPR = roc_curve@x.values[[1]],
+  TPR = roc_curve@y.values[[1]]
+)
+
+# Plot mit ggplot2 erstellen
+ggplot(roc_df, aes(x = FPR, y = TPR)) +
+  geom_line(color = "dodgerblue3", size = 1.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", size = 0.7) +
+  annotate("text", x = 0.5, y = 0.3, label = paste("AUC =", round(auc, 4)), color = "black", size = 3.8) +
+  labs(title = "ROC Curve", x = "False Positive Rate", y = "True Positive Rate") +
+  theme_minimal()
+```
+
+# Appendix with further figures
+
+Plot of distribution of LUAD and LUSC patients after PCA:
+
+```{r}
+pca_LUSC_LUAD = prcomp(t(df_selected_selected))
+
+colors = c(rep("LUAD", 515), rep("LUSC", 498))
+# Erstellen des UMAP-Plots
+ggplot(pca_LUSC_LUAD$x, aes(x = PC1, y = PC2, color = colors)) +
+  geom_point(size = 2) 
+```
+
+UMAP plot: LUAD vs LUSC 
+a) without PCA 
+```{r}
+library(umap)
+library(ggplot2)
+
+# transpose matrix
+gsva_es_comb_ll_t <- t(gsva_es_comb_ll)
+```
+
+```{r}
+# calculate umap
+umap_gsva_ll <- umap(gsva_es_comb_ll_t)
+
+# check dimension
+print(dim(umap_gsva_ll$layout))  # should be n x 2 
+```
+
+```{r}
+plot(umap_gsva_ll$layout[,1], umap_gsva_ll$layout[,2],
+     xlab = "UMAP Dimension 1", ylab = "UMAP Dimension 2",
+     main = "UMAP Plot",
+     pch = 20)
+```
+
+```{r}
+# annotations 
+annot <- rbind(LUSC_annot, LUAD_annot)
+
+# combine data
+umap_gsva_ll_color <- data.frame(
+  UMAP1 = umap_gsva_ll$layout[, 1],
+  UMAP2 = umap_gsva_ll$layout[, 2],
+  tumor = annot$cancer_type_abbreviation)
+
+# plot umap results
+ggplot(umap_gsva_ll_color, aes(x = UMAP1, y = UMAP2, color = tumor)) +
+  geom_point(size = 1) +
+  labs(title = "UMAP plot: LUAD vs LUSC",
+       x = "UMAP dimension 1",
+       y = "UMAP dimension 2") +
+  theme_minimal() +
+  theme(legend.position = "right")  
+
+# define color 
+custom_colors <- c("LUAD" = "dodgerblue", "LUSC" = "brown1")
+
+# plot with own colors
+ggplot(umap_gsva_ll_color, aes(x = UMAP1, y = UMAP2, color = tumor)) +
+  geom_point(size = 1) +
+  labs(title = "UMAP Plot: LUAD vs LUSC",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_manual(values = custom_colors, name = "Tumor Type") +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+```
+
+b) umap computed on pca results
+```{r}
+# PCA 
+library(irlba)
+pca_gsva_ll <- prcomp(gsva_es_comb_ll_t)
+
+```
+
+```{r}
+scores_ll <- pca_gsva_ll$x
+```
+
+```{r}
+# calculate umap
+umap_pca_gsva_ll <- umap(scores_ll)
+
+# check dimension
+print(dim(umap_pca_gsva_ll$layout))  # should be n x 2 
+```
+
+```{r}
+# combine data
+umap_pca_gsva_ll_color <- data.frame(
+  UMAP1 = umap_pca_gsva_ll$layout[, 1],
+  UMAP2 = umap_pca_gsva_ll$layout[, 2],
+  tumor = annot$cancer_type_abbreviation)
+
+# plot umap results
+ggplot(umap_pca_gsva_ll_color, aes(x = UMAP1, y = UMAP2, color = tumor)) +
+  geom_point(size = 1) +
+  labs(title = "UMAP plot: LUAD vs LUSC",
+       x = "UMAP dimension 1",
+       y = "UMAP dimension 2") +
+  theme_minimal() +
+  theme(legend.position = "right")  
+```
+
+Plot
+```{r}
+data_reg_plot = data.frame(
+  "HALLMARK_WNT_BETA_CATENIN_SIGNALING" = t_df_selected_selected$HALLMARK_WNT_BETA_CATENIN_SIGNALING,
+  "Label" = t_df_selected_selected$Label)
+
+model_reg_plot <- glm(Label ~ HALLMARK_WNT_BETA_CATENIN_SIGNALING, data = data_reg_plot, family = binomial)
+
+
+new_data <- data.frame(HALLMARK_WNT_BETA_CATENIN_SIGNALING = seq(min(t_df_selected_selected$HALLMARK_WNT_BETA_CATENIN_SIGNALING), max(t_df_selected_selected$HALLMARK_WNT_BETA_CATENIN_SIGNALING), length.out = length(t_df_selected_selected$HALLMARK_WNT_BETA_CATENIN_SIGNALING)))
+
+new_data$prob <- predict(model_reg_plot, newdata = new_data, type = "response")
+
+
+library(ggplot2)
+
+ggplot(data_reg_plot, aes(x = HALLMARK_WNT_BETA_CATENIN_SIGNALING, y = Label)) +
+  geom_point(alpha = 0.3, position = position_jitter(width = 0.1, height = 0.05)) +
+  geom_line(data = new_data, aes(x = HALLMARK_WNT_BETA_CATENIN_SIGNALING, y = prob), color = "blue", size = 1.2) +
+  labs(title = "Logistic Regression Model", x = "HALLMARK_WNT_BETA_CATENIN_SIGNALING activity", y = "Probability of being LUAD") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+```{r}
+data_reg_plot_2 = data.frame(
+  "VEGF_A_UP.V1_DN" = t_df_selected_selected$VEGF_A_UP.V1_DN,
+  "Label" = t_df_selected_selected$Label)
+
+model_reg_plot_2 <- glm(Label ~ VEGF_A_UP.V1_DN, data = data_reg_plot_2, family = binomial)
+
+
+new_data_2 <- data.frame(VEGF_A_UP.V1_DN = seq(min(t_df_selected_selected$VEGF_A_UP.V1_DN), max(t_df_selected_selected$VEGF_A_UP.V1_DN), length.out = length(t_df_selected_selected$VEGF_A_UP.V1_DN)))
+
+new_data_2$prob <- predict(model_reg_plot_2, newdata = new_data_2, type = "response")
+
+
+library(ggplot2)
+
+ggplot(data_reg_plot_2, aes(x = VEGF_A_UP.V1_DN, y = Label)) +
+  geom_point(alpha = 0.3, position = position_jitter(width = 0.1, height = 0.05)) +
+  geom_line(data = new_data_2, aes(x = VEGF_A_UP.V1_DN, y = prob), color = "blue", size = 1.2) +
+  labs(title = "Logistic Regression Model", x = "VEGF_A_UP.V1_DN activity", y = "Probability of being LUAD") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))

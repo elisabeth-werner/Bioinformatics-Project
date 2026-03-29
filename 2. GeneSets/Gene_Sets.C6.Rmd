@@ -1,0 +1,102 @@
+Here we want to select and analyse suitable gene sets from msigdb based on our previous analysis
+```{r}
+BiocManager::install("fgsea")
+install.packages("msigdbr")
+library(msigdbr)
+library(tidyverse)
+library(clusterProfiler)
+library(RColorBrewer)
+library(fgsea)
+```
+As can be seen by the GSEA Analysis we performed over the LUAD Data with the hallmark gene sets provides by Hermann we can see that Repair-, Apoptosis-, Metastasis-, Proliferation- and Replication Pathways are especially significant enriched in LUAD. Thus we will focus on Genes belonging to these areas. 
+
+So I decided to take a look at the gene ontology gene sets (C5) (subcategory = biological processes) from msigdb
+Please copy code to you DATA folder and remove #s there in order to run code as it is to big to be pushed
+```{r}
+#library("dplyr")
+#C5 = msigdbr(species = "Homo sapiens", category = "C5", subcategory = "GO:BP")
+#str(C5)
+#class(hallmark_gene_sets)
+#we need to reformat the msigdbr output into a list of vectors (gene sets) with the corresponding genes in them
+
+#very important code for GSEA with msigdb
+#C5.genesymbols.ls = C5 %>%
+  #dplyr::select(gs_name, gene_symbol) %>%
+  #group_by(gs_name) %>%
+  #summarise(all.genes = list(unique(gene_symbol))) %>%
+  #deframe()
+```
+C6 optimized for GSEA
+```{r}
+#library("dplyr")
+#C6 = msigdbr(species = "Homo sapiens", category = "C6")
+#str(C6)
+#class(hallmark_gene_sets)
+#we need to reformat the msigdbr output into a list of vectors (gene sets) with the corresponding genes in them
+
+#very important code for GSEA with msigdb
+#C6.genesymbols.ls = C6 %>%
+  #dplyr::select(gs_name, gene_symbol) %>%
+  #group_by(gs_name) %>%
+  #summarise(all.genes = list(unique(gene_symbol))) %>%
+  #deframe()
+```
+These can now be analysed the same way we did with the other gene sets
+```{r}
+similarity_matrix_msigdbC5 = matrix(0, nrow = length(C5.genesymbols.ls), ncol = length(C5.genesymbols.ls))
+rownames(similarity_matrix_msigdbC5) = colnames(similarity_matrix_msigdbC5) = names(C5.genesymbols.ls)
+for (i in 1:length(C5.genesymbols.ls)) {
+  for (j in 1:length(C5.genesymbols.ls)) {
+    similarity_matrix_msigdbC5[i, j] = jaccard(C5.genesymbols.ls[[i]], C5.genesymbols.ls[[j]])
+  }
+}
+```
+Code above didnt work as to much time was needed. Thus I will try the same thing with the C6 oncogenic signature genes:
+```{r}
+similarity_matrix_msigdbC6 = matrix(0, nrow = length(C6.genesymbols.ls), ncol = length(C6.genesymbols.ls))
+rownames(similarity_matrix_msigdbC6) = colnames(similarity_matrix_msigdbC6) = names(C6.genesymbols.ls)
+for (i in 1:length(C6.genesymbols.ls)) {
+  for (j in 1:length(C6.genesymbols.ls)) {
+    similarity_matrix_msigdbC6[i, j] = jaccard(C6.genesymbols.ls[[i]], C6.genesymbols.ls[[j]])
+  }
+}
+```
+Now we will plot the similarities in a heatmap
+```{r}
+names = names(C6.genesymbols.ls)
+library(pheatmap)
+pheatmap(as.matrix(similarity_matrix_msigdbC6),
+      cellwidth = 5, cellheight = 5,
+        cluster_rows = F,
+         cluster_cols = F,
+         fontsize = 5,
+          main = "Jaccard Similarity Heatmap")
+```
+We can tell from the heatmap above that there is no significant overlap in any of the gene sets. Therefore we now perform a GSEA of the LUAD data with these gene sets
+```{r}
+fgsea_res_msigdbC6 = fgseaSimple(pathways = C6.genesymbols.ls,
+                         stats = fold_change_ranked_list_gn,
+                         nperm = 10000,
+                         minSize = 1,
+                         maxSize = length(fold_change_ranked_list_gn) - 1)
+```
+
+```{r}
+# Plot GSEA results using barplot
+barplot(fgsea_res_msigdbC6$NES, 
+        names.arg = fgsea_res_msigdbC6$pathway, 
+        las = 2,
+        cex.names = 0.3,
+        col = ifelse(fgsea_res_msigdbC6$padj < 0.05, "red", "gray"),
+        main = "GSEA Results C6",
+        xlab = "Pathway",
+        ylab = "Normalized Enrichment Score (NES)",
+)
+```
+Then we will select those gene sets that showed significant enrichment (23 gene sets out of the 189)
+```{r}
+C6_significant_gs = fgsea_res_msigdbC6$pathway[which(fgsea_res_msigdbC6$padj < 0.05)]
+print(C6_significant_gs)
+C6.new.genesets = C6.genesymbols.ls[C6_significant_gs]
+C6.all.genesets = C6.genesymbols.ls
+```

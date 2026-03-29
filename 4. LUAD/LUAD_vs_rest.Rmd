@@ -1,0 +1,342 @@
+LUSC = Lung squamous cell carcinoma
+
+Filtering for caner_type_abbreviation == LUSC:
+```{r}
+df_LUSC = subset(tcga_annot, cancer_type_abbreviation == "LUSC")
+```
+
+Filtering for caner_type_abbreviation == LUAD:
+```{r}
+df_LUAD = subset(tcga_annot, cancer_type_abbreviation == "LUAD")
+```
+
+Creating two dataframes creating the expression values according to the selected sample IDs:
+```{r}
+install.packages("dplyr")
+```
+
+```{r}
+library(dplyr)
+# hier wähle ich aus dem pancancer dataset die jenigen spalten aus, bei denen die sample ID mit der sample ID aus den spezfischen LUSC und LUAD datasets (annot) übereinstimmen
+sample_ids_LUSC = df_LUSC$sample
+LUSC_exp = tcga_exp_proteins_shortened %>% select(intersect(colnames(tcga_exp_proteins_shortened), sample_ids_LUSC))
+
+sample_ids_LUAD = df_LUAD$sample
+LUAD_exp = tcga_exp_proteins_shortened %>% select(intersect(colnames(tcga_exp_proteins_shortened), sample_ids_LUAD))
+```
+
+```{r}
+dim(LUSC_exp)
+dim(LUAD_exp)
+```
+
+
+Creating the volcano plot following the same steps as in "DescriptiveAnalysisLUAD":
+
+```{r}
+# calculating the mean expressions for each gene in LUSC and LUAD tissue
+LUSC_exp_means = apply(LUSC_exp, 1, mean)
+LUAD_exp_means = apply(LUAD_exp, 1, mean)
+```
+
+Calculating the Foldchange value (LUAD/LUSC)
+```{r}
+LUSC_LUAD_FC = Map("-", LUAD_exp_means, LUSC_exp_means)
+```
+
+Now I am creating a dataframe with the gene ids and FC-values:
+```{r}
+df_FC_LUSC_LUAD = (do.call(cbind, LUSC_LUAD_FC))
+df_FC_LUSC_LUAD = as.data.frame(t(df_FC_LUSC_LUAD))
+```
+
+
+```{r}
+transposed_LUSC = t(LUSC_exp)
+transposed_LUAD = t(LUAD_exp)
+# musste man transponieren weil das über Spalten rechnet
+
+# Vektor für die Speicherung der p-Werte
+p_values_LL = numeric(ncol(transposed_LUSC))
+
+for (i in 1:ncol(transposed_LUSC)) {
+  tryCatch({
+    shapiro_result_tumor = shapiro.test(transposed_tumor[, i])
+    shapiro_result_normal = shapiro.test(transposed_normal[, i])
+    
+    p_values_LL[i] = min(shapiro_result_tumor$p.value, shapiro_result_normal$p.value)
+  }, error = function(e) {
+    p_values_LL[i] = NA  # Setze p-Wert auf NA, wenn ein Fehler auftritt
+  })
+}
+
+# Anzeigen der p-Werte
+#print(p_values4_LL
+
+sumNALL = sum(is.na(p_values_LL))
+print(sumNALL)
+
+p_values_über_0.5_LUSC_LUAD = sum(p_values_LL > 0.05)
+print(p_values_über_0.5_LUSC_LUAD)
+print(length(p_values_LL))
+ratio_not_normally_distributed_LL = p_values_über_0.5_LUSC_LUAD / length(p_values_LL)
+print(ratio_not_normally_distributed_LL)
+```
+over 1/3 can not be considered to be normally distributed. Therefore, Wilcoxon-Test (unpaired) will be used to get the p values. 
+
+```{r}
+# Vektor für die Speicherung der p-Werte
+p_values_LUSC_LUAD = numeric(ncol(transposed_LUSC))
+
+for (i in 1:ncol(transposed_LUAD)) {
+  wilcoxon_test_result_LL = wilcox.test(transposed_LUAD[,i], transposed_LUSC[,i], paired = F)
+  
+  p_values_LUSC_LUAD[i] = wilcoxon_test_result_LL$p.value
+}
+```
+
+Bonferroni correction:
+```{r}
+bonferroni_alpha_LUSC_LUAD = 0.05 / length(p_values_LUSC_LUAD)
+print(bonferroni_alpha_LUSC_LUAD)
+```
+
+adding the p_values in the dataframe:
+```{r}
+df_FC_LUSC_LUAD = cbind(df_FC_LUSC_LUAD, p_values_LUSC_LUAD)
+
+df_FC_LUSC_LUAD = as.data.frame(df_FC_LUSC_LUAD)
+```
+
+
+Volcano plot:
+```{r}
+#install.packages(c("tidyverse", "ggrepel"))
+#install.packages("kableExtra")
+
+# Load packages
+library(tidyverse)
+library(ggrepel)
+library(kableExtra)
+
+
+# A short function for outputting the tables
+knitr_table = function(x) {
+  x %>% 
+    knitr::kable(format = "html", digits = Inf, 
+                 format.args = list(big.mark = ",")) %>%
+    kableExtra::kable_styling(font_size = 15)
+}
+
+df_FC_LUSC_LUAD = df_FC_LUSC_LUAD %>% 
+  mutate(
+    Expression_in_LUAD = case_when(V1 >= 0 & p_values_LUSC_LUAD <= bonferroni_alpha_LUSC_LUAD ~ "Upregulated genes",
+                           V1 <= 0 & p_values_LUSC_LUAD <= bonferroni_alpha_LUSC_LUAD ~ "Downregulated genes",
+                           TRUE ~ "Unchanged genes")
+    )
+```
+
+```{r}
+library(ggplot2)
+p_LUSC_LUAD = ggplot(df_FC_LUSC_LUAD, aes(V1, -log(p_values_LUSC_LUAD,10))) +
+  geom_point(aes(color = Expression_in_LUAD), size = 2/5) +
+  xlab(expression("log"[2]*"FC")) + 
+  ylab(expression("-log"[10]*"p_value (adjusted)")) +
+  scale_color_manual(values = c("dodgerblue", "gray50", "brown1")) +
+  guides(colour = guide_legend(override.aes = list(size=1.5))) 
+p_LUSC_LUAD
+```
+Using a boxplot to compare the differences between LUSC and LUAD for one gene (gene on the left):
+```{r}
+#install.packages("gridExtra")
+library(gridExtra)
+LUAD_LUSC_outlier = rownames(subset(df_FC_LUSC_LUAD, V1 < -10.6))
+#print(LUAD_LUSC_outlier)
+
+outlier_exp_LUAD = LUAD_exp[rownames(LUAD_exp) %in% LUAD_LUSC_outlier, ]
+outlier_exp_LUSC = LUSC_exp[rownames(LUSC_exp) %in% LUAD_LUSC_outlier, ]
+
+t_outlier_exp_LUAD = t(outlier_exp_LUAD)
+t_outlier_exp_LUAD = as.data.frame(t_outlier_exp_LUAD)
+t_outlier_exp_LUSC = t(outlier_exp_LUSC)
+t_outlier_exp_LUSC = as.data.frame(t_outlier_exp_LUSC)
+
+y_limits = range(c(t_outlier_exp_LUAD$ENSG00000134757, t_outlier_exp_LUSC$ENSG00000134757))
+
+outlier_p1 = ggplot(t(outlier_exp_LUSC), aes(x = factor(0), y = ENSG00000134757)) +
+  geom_boxplot() +
+  labs(title = "LUSC", x = NULL, y = "ENSG00000134757") +
+  theme_minimal() +
+  ylim(y_limits)
+outlier_p1
+
+outlier_p2 = ggplot(t(outlier_exp_LUAD), aes(x = factor(0), y = ENSG00000134757)) +
+  geom_boxplot() +
+  labs(title = "LUAD", x = NULL, y = "ENSG00000134757") +
+  theme_minimal() +
+  ylim(y_limits)
+outlier_p2
+
+grid.arrange(outlier_p1, outlier_p2, ncol = 2)
+```
+
+
+
+```{r}
+LUSC_LUAD_FC_values = unlist(LUSC_LUAD_FC)
+LL_FC_sorted <- sort(LUSC_LUAD_FC_values)
+
+bottom_1500 <- LL_FC_sorted[1:1500]
+top_1500 <- tail(LL_FC_sorted, 1500)
+
+
+#interesting_genes_LL_under4 = rownames(subset(df_FC_LUSC_LUAD, V1 < -4))
+
+rownames_niedrig <- rownames(df_FC_LUSC_LUAD)[which(LUSC_LUAD_FC_values %in% bottom_1500)]
+
+organism = "org.Hs.eg.db"
+
+# Pathway-Analysis
+pw_LL_under4 = enrichGO(gene = rownames_niedrig,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(pw_LL_under4)
+```
+
+```{r}
+#interesting_genes_LL_over4 = rownames(subset(df_FC_LUSC_LUAD, V1 > 4))
+
+rownames_hohe <- rownames(df_FC_LUSC_LUAD)[which(LUSC_LUAD_FC_values %in% top_1500)]
+
+organism = "org.Hs.eg.db"
+
+# Pathway-Analysis
+pw_LL_over4 = enrichGO(gene = rownames_hohe,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(pw_LL_over4)
+```
+
+
+------------------------------------------------------------------
+Now we compare LUAD / all other tumor types:
+
+remove tumor type "LAUD" from tcga_exp:
+```{r}
+# ! = nicht
+tcga_exp_withoutLUAD = tcga_exp_proteins_shortened[, !colnames(tcga_exp_proteins_shortened) %in% sample_ids_LUAD]
+```
+
+calculating means, FC and p values:
+```{r}
+# means
+LUAD_exp_means = apply(LUAD_exp, 1, mean)
+tcga_exp_withoutLUAD_means = apply(tcga_exp_withoutLUAD, 1, mean)
+
+# FC
+OTHER_LUAD_FC = Map("-", LUAD_exp_means, tcga_exp_withoutLUAD_means)
+
+# creating a df
+df_FC_OTHER_LUAD = (do.call(cbind, OTHER_LUAD_FC))
+df_FC_OTHER_LUAD = as.data.frame(t(df_FC_OTHER_LUAD))
+
+# transpose 
+transposed_LUAD = t(LUAD_exp)
+transposed_OTHER = t(tcga_exp_withoutLUAD)
+
+# p values
+p_values_OTHER_LUAD = numeric(ncol(transposed_OTHER))
+
+for (i in 1:ncol(transposed_LUAD)) {
+  wilcoxon_test_result_OTHER_LUAD = wilcox.test(transposed_LUAD[,i], transposed_OTHER[,i], paired = F)
+  
+  p_values_OTHER_LUAD[i] = wilcoxon_test_result_OTHER_LUAD$p.value
+}
+
+# bonferroni correction
+bonferroni_alpha_OTHER_LUAD = 0.05 / length(p_values_OTHER_LUAD)
+print(bonferroni_alpha_OTHER_LUAD)
+
+# adding p values in df
+df_FC_OTHER_LUAD = cbind(df_FC_OTHER_LUAD, p_values_OTHER_LUAD)
+df_FC_OTHER_LUAD = as.data.frame(df_FC_OTHER_LUAD)
+```
+
+volcano plot:
+```{r}
+knitr_table = function(x) {
+  x %>% 
+    knitr::kable(format = "html", digits = Inf, 
+                 format.args = list(big.mark = ",")) %>%
+    kableExtra::kable_styling(font_size = 15)
+}
+
+df_FC_OTHER_LUAD = df_FC_OTHER_LUAD %>% 
+  mutate(
+    Expression = case_when(V1 >= 0 & p_values_OTHER_LUAD <= bonferroni_alpha_OTHER_LUAD ~ "Up-regulated",
+                           V1 <= 0 & p_values_OTHER_LUAD <= bonferroni_alpha_OTHER_LUAD ~ "Down-regulated",
+                           TRUE ~ "Unchanged")
+    )
+
+p_OTHER_LUAD = ggplot(df_FC_OTHER_LUAD, aes(V1, -log(p_values_OTHER_LUAD,10))) +
+  geom_point(aes(color = Expression), size = 2/5) +
+  xlab(expression("log"[2]*"FC")) + 
+  ylab(expression("-log"[10]*"p_value")) +
+  scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
+  guides(colour = guide_legend(override.aes = list(size=1.5))) 
+p_OTHER_LUAD
+```
+Using a boxplot to compare the differences between other tumor types and LUAD for one gene on the right:
+```{r}
+LUAD_OTHER_outlier = rownames(subset(df_FC_OTHER_LUAD, V1 > 14 & -log(p_values_OTHER_LUAD, 10) > 300))  
+print(LUAD_OTHER_outlier)
+
+outlier_exp_LUAD_O = LUAD_exp[rownames(LUAD_exp) %in% LUAD_OTHER_outlier, ]
+outlier_exp_OTHER = tcga_exp_withoutLUAD[rownames(tcga_exp_withoutLUAD) %in% LUAD_OTHER_outlier, ]
+
+t_outlier_exp_LUAD_O = t(outlier_exp_LUAD_O)
+t_outlier_exp_LUAD_O = as.data.frame(t_outlier_exp_LUAD_O)
+t_outlier_exp_OTHER = t(outlier_exp_OTHER)
+t_outlier_exp_OTHER = as.data.frame(t_outlier_exp_OTHER)
+
+y_limits_O = range(c(t_outlier_exp_LUAD_O$ENSG00000122852, t_outlier_exp_OTHER$ENSG00000122852))
+
+outlier_p3 = ggplot(t(outlier_exp_OTHER), aes(x = factor(0), y = ENSG00000122852)) +
+  geom_boxplot() +
+  labs(title = "other cancer types", x = NULL, y = "ENSG00000122852") +
+  theme_minimal() +
+  ylim(y_limits_O)
+outlier_p3
+
+outlier_p4 = ggplot(t(outlier_exp_LUAD_O), aes(x = factor(0), y = ENSG00000122852)) +
+  geom_boxplot() +
+  labs(title = "LUAD", x = NULL, y = "ENSG00000122852") +
+  theme_minimal() +
+  ylim(y_limits_O)
+outlier_p4
+
+grid.arrange(outlier_p3, outlier_p4, ncol = 2)
+```
+
+
+```{r}
+interesting_genes_OTHER_LUAD_over5 = rownames(subset(df_FC_OTHER_LUAD, V1 > 5))
+
+organism = "org.Hs.eg.db"
+
+# Pathway-Analysis
+pw_OTHER_LUAD_over5 = enrichGO(gene = interesting_genes_OTHER_LUAD_over5,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(pw_OTHER_LUAD_over5)
+```
+
