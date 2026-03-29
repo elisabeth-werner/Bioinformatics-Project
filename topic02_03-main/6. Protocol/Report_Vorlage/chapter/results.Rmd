@@ -1,0 +1,86 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+# Results
+
+## TCGA Pan-cancer analysis
+### Different tumor types show distinct clustering using GSVA and UMAP 
+The genetic diversity and heterogeneity of the pan-cancer dataset were analyzed using GSVA. The data was narrowed down to the top 30 genesets with the highest variance for further analysis. Average enrichment scores for each tumor type were calculated to compare the different tumor types, showing recognizable variation in pathway activity between patients. Hierarchical clustering using complete linkage was performed on the heatmap, revealing distinct groupings of pathways and patients (see figure \ref{501} A).
+To visualize the diversity among patients, a PCA was performed on the GSVA enrichment scores for all 73 genesets. Additionally a UMAP was computed on the scores of the PCA. The visualization of the first two UMAP dimensions can be seen in figure \ref{501} A. These methods resulted in 11 clusters, 8 of which were visibly isolated from the rest. To identify the basis of the grouping, the clinical annotations of these patients were colored one after another. Most annotations such as age or gender did not cluster according to the UMAP plot. The only clinical annotations that clustered similarly were the tumor types, for example, breast cancer (BRCA, orange on the right) or prostate adenocarcinoma (PRAD, blue on the far right) show distinct groups. Both cancer types show a very different regulation than the others, as seen in figure \ref{501} A. In the average of the patients with prostate adenocarcinoma the pathways "HALLMARK_MYC_TARGETS_V1", "HALLMARK_E2F_TARGETS" and "HALLMARK_G2M_CHECKPOINT" are very down-regulated, but this is also the case in thyroid carcinoma (THCA) and pheochromocytoma and paraganglioma (PCPG). What distinguishes PRAD from the rest of the tumors is the upregulation of "HALLMARK_ANDROGEN_RESPONSE" and could therefore be a possible marker for this tumor type. 
+In the center of the image, it becomes more difficult to separate the tumor types and assign them to specific clusters. If you compare this to the results of the heatmap, tumors that have similar activity for most pathways tend to cluster together. Two tumors that are very alike and make it very difficult to differentiate them based on their very similar pathway activity are colon adenocarcinoma a (COAD) and rectal adenocarcinoma a (READ). 
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics{"C:/Users/kolbc/Desktop/figures_bioinfo/501.png"}
+      \caption[\textbf{Heatmap and UMAP on Pan-Cancer data}.]{\textbf{Heatmap and UMAP on Pan-Cancer data}. (A) Here a heatmap of GSVA with average enrichment scores of patients assigned to each tumor type in columns and top 30 variant gene sets in rows can be seen. (B) This figure shows a UMAP plot of pathway activity data colored by tumor type, indicating specific tumor type clustering. }
+    \label{501}
+\end{figure}
+
+
+### Cancer types show differences and similarities in pathway activity
+In addition to clustering by tumor type, patients can be grouped by similarities and differences in different pathway regulations. 
+For example, the activity of the hallmark geneset called "PI3K_AKT_MTOR_signaling" is up-regulated in BRCA and gastrointestinal tumors such as Liver Hepatocellular Carcinoma (LIHC), while it is down-regulated in other patients or tumors, which can be seen in figure \ref{UMAP plot colored according to enrichment scores}. One pathway that shows a similar scatter in activity levels between tumors relates to oxidative phosphorylation. In LUAD, for example, this is very strongly upregulated compared to other tumors. 
+This was investigated with the help of UMAP plots and staining of the respective enrichment scores regarding the pathways, therefore the functions `irlba` [@irlba_quelle] and `umap` [@umap_quelle] were used.
+
+Furthermore patients with the same tumor type often show similar patterns of activity.
+However, there are also genesets that show similar expression not only within a tumor but across tumor types. These include gene sets that affect coagulation or Myc.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics{"C:/Users/kolbc/Desktop/figures_bioinfo/1.1.png"}
+    \caption[\textbf{UMAP plot colored according to enrichment scores}.]{\textbf{UMAP plot colored according to different pathway activities}. This figure shows four different UMAP plots of gene expression data colored by their enrichment scores for the activity of the PI3K-Akt-mTOR pathway as well as oxidative phosphorylation, Myc, and coagulation, indicating a tumor-specific enrichment and differences as well as similarities between tumor types.}
+    \label{UMAP plot colored according to enrichment scores}
+\end{figure}
+
+## Focused analysis
+### Average LUAD patients show enrichment in certain hallmark pathways
+First, a GSEA on the mean FC values for each gene across all LUAD patients, comparing healthy tissue expression data to LUAD tissue expression data, was performed. To do this, a ranked and named list of the mean FC values and a list containing the corresponding gene sets were created, and the `fgsea` function was applied. This analysis revealed significant enrichment in distinct hallmark gene sets associated with proliferation, metastasis, angiogenesis, apoptosis, and genome repair mechanisms. The specific gene sets in which significant enrichment was found are shown in figure \ref{301}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics{"C:/Users/kolbc/Desktop/figures_bioinfo/301.png"}
+    \caption[\textbf{Barplot GSEA hallmark genesets}.]{\textbf{Barplot GSEA hallmark genesets}. The figure shows the NES value of the given gene sets on the y-lab and the corresponding gene set on the x-lab. Bars shown in red show significant enrichments with a p-value < 0.05.}
+    \label{301}
+\end{figure}
+
+### LUAD patients show individual enrichment but poor clustering using GSEA and UMAP 
+After performing GSEA using the `fgsea` function on the FC data of each LUAD patient (LUAD tissue vs. healthy tissue) with both hallmark and oncogenic signature gene sets (C6 from MSigDB), each patient showed an individual enrichment pattern. This was also visualized in a heatmap created from the NES values computed from a GSEA on the oncogenic signature (C6) genesets from the `msigdbr`-package [@msigdbr], and stored in an enrichment matrix (top 30 most variant) (as seen in figure \ref{302}). Performing a UMAP on the GSEA data (hallmark- and C6-genesets) revealed that these patients cluster very poorly, showing no distinct subsets as can be seen in the appendix.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics{"C:/Users/kolbc/Desktop/figures_bioinfo/302.png"}
+    \caption[\textbf{Heatmap top 30 C6 genesets}.]{\textbf{Heatmap GSEA patients}. The figure shows the the enrichment which each LUAD patient showed in each of the 30 most variant C6 genesets in comparison to healthy tisssue, using a GSEA. Enrichment in the upper part of the ranked list is shown in red colours, enrichment in the lower part is shown in blueish colours. NES values which did not show significance (p-value > 0.15) were set to zero.}
+    \label{302}
+\end{figure}
+
+
+### LUAD and LUSC patients show differences in gene expression and pathway activity
+The comparison of gene expression between LUAD and LUSC patients reveals significant differences. Using a volcano plot, FC is calculated as the ratio of mean gene expression levels between the groups. The Wilcoxon rank-sum test with Bonferroni correction was applied to determine significance (for further detail see methods in the appendix). The results are shown in figure \ref{502} A.
+Next, enrichGO analysis was performed on the 1,500 genes with the highest and 1,500 genes with the lowest FC value. These results can be seen in figure \ref{204} in the appendix.
+Genes associated with epidermal development, keratinization, and cytoskeletal organization are generally downregulated in LUAD compared to LUSC. Conversely, LUAD shows upregulation in pathways related to regulation of body fluid levels, cell-cell adhesion via plasma-membrane adhesion molecules and vascular processes in the circulatory system. 
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics{"C:/Users/kolbc/Desktop/figures_bioinfo/502.png"}
+    \caption[\textbf{Volcano plot}.]{\textbf{Volcano plot and GSVA heatmap LUAD vs. LUSC}. (A) This plot visualizes the differences in gene expression patterns in LUAD and LUSC patients. (B) The heatmap displays GSVA enrichment scores for patients with LUAD and LUSC tumor types. It features the 30 gene sets with the highest variance across the rows, while the columns represent individual patients. Color coding at the top indicates the respective classification of patients. Hierarchical clustering groups the patients into two main clusters.}
+    \label{502}
+\end{figure}
+
+A GSVA was then applied to patients with LUSC or LUAD in order to compare their pathway activity. Again, it is noticeable that both tumor types cluster to a distinct extend, so that a tendency can be identified between LUAD and LUSC (figure \ref{502} B).
+
+### Binary logistic regression model to differentiate between LUAD and LUSC 
+The constructed logistic regression model distinguishes between LUAD and LUSC patients based on pathway activity. Following backward selection on an initial model containing the 30 most variable pathways identified through GSVA, 13 pathways emerged as significant contributors (table \ref{Tabelle1} in appendix). Pathways like "HALLMARK_MITOTIC_SPINDLE", "HALLMARK_OXIDATIVE_PHOSPHORYLATION" and "VEGF_A_UP.V1_DN" indicate higher activity in LUAD. This reflects LUAD's metabolic activity and interactions with tumor microenvironment. On the other hand, pathways such as "HALLMARK_WNT_BETA_CATENIN_SIGNALING", "TBK1.DF_DN" and "HALLMARK_MTORC1_SIGNALING" are more active in LUSC, as indicated by their negative coefficient. This reflects the structural and keratinozation functions characteristic of squamous cells (see table \ref{Tabelle1} and figure \ref{204}). 
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics{"C:/Users/kolbc/Desktop/figures_bioinfo/201.png"}
+    \caption[\textbf{Logistic regression model}.]{\textbf{Logistic regression model distinguishing LUAD and LUSC}. (A) Confusion table summarizing the results of the regression. (B) ROC-Curve visualizing the model's performance.}
+    \label{201}
+\end{figure} 
+
+The model achieved an accuracy of 92.6% in correctly classifying patients, with LUAD identified when P > 0.5 on the test dataset. Examination of the confusion matrix reveals accurate classification of 88 out of 96 LUAD and 99 out of 106 LUSC patients, resulting in a false-negative rate of 8.3%, a false-positive rate of 6.6%, and a true-positive rate (recall) of 91.7% (see figure \ref{201}). Evaluation via ROC curve analysis yielded an AUC value of 0.9779.
+
+Comparison against a null model, assessed using pseudo R-square ($R^2$ = 0.7075) and a chi-square test (p < 2.2e-16), demonstrates significant improvement in predictive accuracy by the logistic regression model. Individual coefficient contributions were evaluated using the Wald test, confirming their statistical significance (see table \ref{Tabelle1}). 

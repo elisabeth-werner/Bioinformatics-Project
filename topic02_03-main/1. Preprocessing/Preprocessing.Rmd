@@ -1,0 +1,351 @@
+Checking for missing values (NA):
+
+```{r}
+total_na_count_exp = sum(is.na(tcga_exp))
+print(total_na_count_exp)
+
+total_na_count_annot = sum(is.na(tcga_annot))
+print(total_na_count_annot)
+
+total_na_count_tumor_norm = sum(is.na(tcga_tumor_norm))
+print(total_na_count_tumor_norm)
+
+total_na_count_genesets = sum(is.na(genesets))
+print(total_na_count_genesets)
+```
+
+Only the tcga_annot dataset contains missing values.
+
+Installation BiomaRt:
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("biomaRt")
+```
+
+
+Extraction of protein-coding genes: 
+
+```{r}
+# install.packages(c("biomaRt", "AnnotationDbi")) if necessary 
+library(biomaRt)
+library(AnnotationDbi)
+
+mart <- useMart("ensembl")
+ensembl = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+# list of all humane genes and their attributes 
+genes = getBM(attributes = c("ensembl_gene_id", "gene_biotype"), mart = ensembl)
+
+# only protein-coding genes
+protein_coding_genes = subset(genes, gene_biotype == "protein_coding")
+
+# attention --> this code inserts only an empty column at the end oft the dara record 
+tcga_exp$ensembl_gene_id = sub("\\..*", "", rownames(tcga_exp))
+
+# Filtering
+tcga_exp_filtered_proteins <- tcga_exp[tcga_exp$ensembl_gene_id %in% protein_coding_genes$ensembl_gene_id, ]
+
+# rownames are overwritten with gene IDs 
+rownames(tcga_exp_filtered_proteins) <- tcga_exp_filtered_proteins[, ncol(tcga_exp_filtered_proteins)]
+
+# remove last column 
+tcga_exp_filtered_proteins <- tcga_exp_filtered_proteins[, -ncol(tcga_exp_filtered_proteins)]
+
+dim(tcga_exp)
+dim(tcga_exp_filtered_proteins)
+#print(nrow(protein_coding_genes))
+```
+
+```{r}
+tcga_exp_begrenzt1 <- tcga_exp_filtered_proteins[1:10000, ]
+dim(tcga_exp_begrenzt1)
+
+tcga_exp_begrenzt_2 <- tcga_exp_filtered_proteins[10001:19579, ]
+dim(tcga_exp_begrenzt_2)
+```
+
+protein-coding genes are plotted in a mean-variance plot and sorted out according to a threshold: for the calculations, the data set must be divided into two parts (otherwise the computer vannot provide the computing power)
+
+```{r}
+# Mittelwert jeder Zeile berechnen - Teil 1
+mean_Zeilen_tcga_exp_begrenzt1 <- apply(tcga_exp_begrenzt1, 1, mean)
+
+# Varianz jeder Zeile berechnen
+varianzen_Zeilen_tcga_exp_begrenzt1 <- apply(tcga_exp_begrenzt1, 1, var)
+
+
+# Mittelwert jeder Zeile berechnen - Teil 2
+mean_Zeilen_tcga_exp_begrenzt_2 <- apply(tcga_exp_begrenzt_2, 1, mean)
+
+# Varianz jeder Zeile berechnen
+varianzen_Zeilen_tcga_exp_begrenzt_2 <- apply(tcga_exp_begrenzt_2, 1, var)
+
+```
+
+after the calculation, the parts are now reassembled:
+
+```{r}
+alle_means_tcga_exp_filtered_proteins = c(mean_Zeilen_tcga_exp_begrenzt1, mean_Zeilen_tcga_exp_begrenzt_2)
+alle_varianzen_tcga_exp_filtered_proteins = c(varianzen_Zeilen_tcga_exp_begrenzt1, varianzen_Zeilen_tcga_exp_begrenzt_2)
+```
+
+The previously calculated values are now to be plotted ub a mean-variance diagram. Two thresholds are calculated for this, one for the top 5% and the other for exactly 50% of the data. The data points categorised by the threshilds are color-coded accordingly. 
+
+```{r}
+# calculating thresholds 
+threshold_oben = quantile(alle_varianzen_tcga_exp_filtered_proteins, probs = 0.95)
+top_5_prozent_varianzen = which(alle_varianzen_tcga_exp_filtered_proteins >= threshold_oben)
+
+threshold_50 = quantile(alle_varianzen_tcga_exp_filtered_proteins, probs = 0.50)
+bad_50_prozent_varianzen = which(alle_varianzen_tcga_exp_filtered_proteins <= threshold_50)
+
+# mean-variance-plot
+plot(alle_means_tcga_exp_filtered_proteins, alle_varianzen_tcga_exp_filtered_proteins, main = "Mean-Variance Plot", xlab = "Mean", ylab = "Variance", cex.lab = 1.5, pch = 19, cex = 0.1)
+
+# color-coding of data points 
+points(alle_means_tcga_exp_filtered_proteins[top_5_prozent_varianzen], alle_varianzen_tcga_exp_filtered_proteins[top_5_prozent_varianzen], col = "firebrick2", pch = 19, cex = 0.1)
+
+points(alle_means_tcga_exp_filtered_proteins[bad_50_prozent_varianzen], alle_varianzen_tcga_exp_filtered_proteins[bad_50_prozent_varianzen], col = "dodgerblue2", pch = 19, cex = 0.1)
+
+```
+
+
+Final Data Set (proteins/variance filtered): top 50% of the protein-coding genes with the highest variance 
+```{r}
+top_50_prozent_varianzen = which(alle_varianzen_tcga_exp_filtered_proteins >= threshold_50)
+
+#new working data set:
+tcga_exp_proteins_shortened = tcga_exp_filtered_proteins[top_50_prozent_varianzen, ]
+dim(tcga_exp_proteins_shortened)
+```
+
+The results of the filtering just carried out are illustrated again graphically below.
+
+```{r}
+varianzen_tcga_shortened = apply(tcga_exp_proteins_shortened, 1, var)
+```
+
+```{r}
+install.packages("ggplot2")
+```
+
+Violin plot of the original data and the filtered / reduced data:
+
+```{r}
+library(ggplot2)
+
+C1 = data.frame(value = alle_varianzen_tcga_exp_filtered_proteins, variable = " protein-coding genes")
+C2 = data.frame(value = varianzen_tcga_shortened, variable = "reduced protein-coding genes")
+
+df = rbind(C1, C2)
+ggplot(df, aes(x = variable, y = value)) +
+  geom_violin(scale = "width", adjust = 1, width= 0.5) +
+  labs(y = "Variance", title = "Violinplot", x = NULL) + 
+  geom_boxplot(width=0.03) + 
+  geom_hline(yintercept = median(alle_varianzen_tcga_exp_filtered_proteins), color = "red") +
+  geom_text(aes(0.5, median(alle_varianzen_tcga_exp_filtered_proteins), label = "q50", vjust = -1), col = "red") +
+  theme(axis.text.x = element_text(size = 18),
+   axis.title.y = element_text(size = 18))
+
+```
+
+A PCA is now applied to the filtered data set for the purposes of dimension reduction and visualisation.
+
+```{r}
+# installing irlba 
+install.packages("irlba")
+
+```
+
+```{r}
+# loading package 
+library(irlba)
+
+# calculating pca with the help of the function "irlba"
+pca_resultat <- irlba(as.matrix(tcga_exp_proteins_shortened), nv = 10)
+pca_resultat
+```
+
+```{r}
+# proportion of standard deviation explained by each principal component is contained in the pca$d vector:
+pca_resultat$d
+```
+
+```{r}
+# plot the proportion of total variance explained by each PC
+variance = (pca_resultat$d)^2
+prop.variance = variance/sum(variance)
+names(prop.variance) = 1:length(prop.variance)
+barplot(prop.variance[1:20],ylab='Proportion of variance') # we only plot the first 10 PCs
+```
+
+```{r}
+# computing the scores of the PCs
+scores <- pca_resultat$v[, 1:2]
+
+# create a scatter plot of the scores
+plot(scores[, 1], scores[, 2], xlab = "PC1", ylab = "PC2", main = "PCA Scatterplot")
+
+```
+
+
+```{r}
+# loading needed libraries
+library(irlba)
+library(ggplot2)
+
+# transpose matrix so that the columns represent the patients 
+tcga_exp_proteins_shortened_t <- t(tcga_exp_proteins_shortened)
+
+# calculating a PCA for the transposed matrix
+pca_resultat <- irlba(tcga_exp_proteins_shortened_t, nv = 10)
+
+# for the following graphical representations, the PCA results need to be converted into a prcomp-like structure 
+pca_prcomp <- list()
+pca_prcomp$sdev <- sqrt(pca_resultat$d^2 / (nrow(tcga_exp_proteins_shortened_t) - 1))
+pca_prcomp$rotation <- pca_resultat$v
+pca_prcomp$x <- tcga_exp_proteins_shortened_t %*% pca_resultat$v
+pca_prcomp$center <- colMeans(tcga_exp_proteins_shortened_t)
+pca_prcomp$scale <- apply(tcga_exp_proteins_shortened_t, 2, sd)
+class(pca_prcomp) <- "prcomp"
+
+# creating a dataframe that combines the PCA results and the clinical annotations 
+plot_data_tumortypes_t <- data.frame(PC1 = pca_prcomp$x[, 1], PC2 = pca_prcomp$x[, 2], Tumortyp = tcga_annot$cancer_type_abbreviation)
+
+# create a scatter plot of the scores, where the data points are colored according to their tumortype
+ggplot(plot_data_tumortypes_t, aes(x = PC1, y = PC2, color = Tumortyp)) +
+  geom_point(size = 2) +
+  labs(title = "PCA Scatterplot nach Tumortypen",
+       x = "PC1",
+       y = "PC2") +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+
+```
+
+Visualisation of all individual loading of the two main principle components of the PCA:
+
+```{r}
+# loading needed libraries
+library(irlba)
+library(ggplot2)
+library(reshape2)
+
+# extract the loadings of the first two PCs 
+loadings <- pca_resultat$u[, 1:2]
+colnames(loadings) <- c("PC1", "PC2")
+
+# create a DataFrame of the loadings 
+loadings_df <- as.data.frame(loadings)
+loadings_df$Variable <- rownames(loadings_df)
+
+# reshaping data for ggplot2 function 
+loadings_melt <- melt(loadings_df, id.vars = "Variable")
+
+# create Loadings plot 
+ggplot(loadings_melt, aes(x = Variable, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Loadings Plot of PCs",
+       x = "Variablen",
+       y = "Loadings",
+       fill = "principle components") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+```{r}
+# extract loadings of two main principle components 
+loadings <- pca_resultat$u[, 1:2]
+colnames(loadings) <- c("PC1", "PC2")
+
+# calculate and sort sum of the absolute vaules of the loadings 
+loading_sums <- rowSums(abs(loadings))
+top_20_indices <- order(loading_sums, decreasing = TRUE)[1:20]
+
+# create dataframe of top 20 variables of the loadings d
+loadings_df <- as.data.frame(loadings[top_20_indices, ])
+loadings_df$Variable <- rownames(loadings_df)
+
+# reshape data
+loadings_melt <- melt(loadings_df, id.vars = "Variable")
+
+# create Loadings Plot 
+ggplot(loadings_melt, aes(x = Variable, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Loadings Plot der Hauptkomponenten (Top 20 Variablen)",
+       x = "Variablen",
+       y = "Loadings",
+       fill = "Hauptkomponente") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+UMAP defines number of expected nearest neighbours & minimum distance (how tightly UMAP packs points which are close together)
+
+```{r}
+install.packages("umap")
+```
+
+```{r}
+# loading needed libraries
+library(irlba)
+library(umap)
+library(ggplot2)
+
+# transpose matrix so that rows represent the patients 
+tcga_exp_proteins_shortened_t <- t(tcga_exp_proteins_shortened)
+
+# calculating PCA
+pca_result_umap <- irlba(tcga_exp_proteins_shortened_t, nv = 20)
+```
+
+```{r}
+# checking results of the PCA 
+pca_result_umap
+```
+
+```{r}
+# extract the scores (PCA-coordinates of the data points)
+pca_scores_umap <- pca_result_umap$u
+
+# checking dimension of PCA-results
+print(dim(pca_scores_umap))  # should be n x 20  (n = number of data points)
+```
+
+```{r}
+# apply UMAP function to the resukts of the PCA 
+umap_result <- umap(pca_scores_umap)
+
+# check dimension of UMAP-results
+print(dim(umap_result$layout))  # should be n x 2  (n = number of data points)
+```
+
+```{r}
+plot(umap_result$layout[,1], umap_result$layout[,2],
+     xlab = "UMAP Dimension 1", ylab = "UMAP Dimension 2",
+     main = "UMAP Plot")
+```
+
+
+```{r}
+# combine umap results and clinical annotations
+umap_data <- data.frame(
+  UMAP1 = umap_result$layout[, 1],
+  UMAP2 = umap_result$layout[, 2],
+  Tumortype = tcga_annot$cancer_type_abbreviation
+)
+
+# create UMAP-Plot
+ggplot(umap_data, aes(x = UMAP1, y = UMAP2, color = Tumortype)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot according to tumortyps",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  theme_minimal() +
+  theme(legend.position = "right") 
+```

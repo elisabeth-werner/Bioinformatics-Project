@@ -1,0 +1,230 @@
+# most variant genesets of hallmark genesets 
+
+closer look at: Angio_ALL, Angio_P_Reg, Immune_AACR, Metas_NEG, Prol_ERK, Metas_AACR, Metas_ALL, Genome_AACR, Inflam_AACR
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[1:2, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Angio_ALL)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Angio_ALL") +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+```
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[5:6, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Angio_P_Reg)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Angio_P_Reg") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[15:16, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Immune_AACR)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Immune_AACR") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[32:33, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Metas_NEG)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Metas_NEG") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[40:41, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Prol_ERK)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Prol_ERK") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[30:31, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Metas_AACR)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Metas_AACR") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[30:31, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Metas_ALL)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Metas_ALL") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[9:10, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Genome_AACR)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Genome_AACR") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# extract enrichment scores of special genesets / pathways
+scores <- NES.enrichment_matrix.ens[20:21, ]
+scores <- t(scores)
+patient <-rownames(umap_luad.tumor_filtered_proteins_t$layout)
+rownames(scores) <- patient
+scores
+
+# combining umap results and enrichment scores
+umap_12 <- umap_luad.tumor_filtered_proteins_t$layout
+umap <- cbind(umap_12, scores)
+umap <- as.data.frame(umap)
+
+
+# create UMAP-Plot (colored tumorstages)
+ggplot(umap, aes(x = V1, y = V2, color = Inflam_AACR)) +
+  geom_point(size = 2) +
+  labs(title = "UMAP Plot with colored tumorstages",
+       x = "UMAP Dimension 1",
+       y = "UMAP Dimension 2") +
+  scale_color_gradient(low = "lightblue", high = "darkblue", name = "Inflam_AACR") +
+  theme_minimal() +
+  theme(legend.position = "right")
+```
+

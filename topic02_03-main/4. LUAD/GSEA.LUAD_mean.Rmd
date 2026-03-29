@@ -1,0 +1,254 @@
+```{r}
+BiocManager::install("fgsea")
+install.packages("msigdbr")
+library(msigdbr)
+library(tidyverse)
+library(clusterProfiler)
+library(RColorBrewer)
+library(fgsea)
+packageVersion("msigdbr")
+```
+First I created a data frame from the FoldChange values and then ordered it by V1 (fold change values) in descending order. Then I extracted the foldchange values into a list of named numerics (fold_change values matched to ensemble id):
+```{r}
+fold_change_df = df_FoldChange_ohne_NA
+fold_change_df = fold_change_df[order(-fold_change_df$V1),]
+
+#names_genes_fold_change = rownames(fold_change_df)
+fold_change_ranked_list = fold_change_df$V1
+names(fold_change_ranked_list) = rownames(fold_change_df)
+```
+
+```{r}
+plot(fold_change_ranked_list)
+```
+The problem we encounter is that the gene sets only contain the gene name or entrez id, not the ensemble id, so we need to somehow rename the genes in the list. I would change them to the gene names as they are also represented in the gene sets by Hermann:
+```{r}
+library('biomaRt')
+# Connect to BioMart
+mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+# Get gene symbols for ensemble IDs
+getGeneSymbols <- function(ensemble_ids, mart) {
+  result <- getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
+                  filters = "ensembl_gene_id",
+                  values = ensemble_ids,
+                  mart = mart)
+  return(result)
+}
+
+# Example list of ensemble IDs
+ensemble_ids <- names(fold_change_ranked_list)
+
+# Get gene symbols for ensemble IDs
+gene_symbols <- getGeneSymbols(ensemble_ids, mart)
+```
+Now we need to link the gene symbols to the list (rename the named numericals):
+```{r}
+fold_change_ranked_list_gn = fold_change_ranked_list
+names(fold_change_ranked_list_gn) = gene_symbols$external_gene_name
+fold_change_ranked_list_gn
+```
+Run gene set enrichment analysis (GSEA via fgsea) across all gene sets from hermann (hallmark gene sets):
+```{r}
+gsea_LUAD_res = fgseaSimple(stats = fold_change_ranked_list_gn,
+                      pathways = new_genesets,
+                      nperm = 10000,
+                      minSize = 1,
+                      scoreType = "std",
+                      maxSize = length(fold_change_ranked_list_gn)-1,
+                      )
+gsea_LUAD_res
+````
+```{r}
+#saveRDS(gsea_LUAD_res, "/Users/paulaverdung/Desktop/Uni/Bachelor MoBi/Info/Bioinfoprojekt/gsea_LUAD_res.RDS")
+```
+Plotting the GSEA results in a barplot:
+```{r}
+# Plot GSEA results using barplot
+barplot(gsea_LUAD_res$NES, 
+        names.arg = gsea_LUAD_res$pathway, 
+        las = 2,
+        cex.names = 0.45,
+        col = ifelse(gsea_LUAD_res$padj < 0.05, "red", "gray"),
+        main = "GSEA results hallmark genesets",
+        xlab = "Pathway",
+        ylab = "Normalized Enrichment Score (NES)",
+        )
+```
+Now I want to select the leading edge genes of the significantly upregulated and downregulated gene sets:
+```{r}
+leading_edge_hermann_a = gsea_LUAD_res$leadingEdge
+#print(leading_edge1)
+names(leading_edge_hermann_a) = gsea_LUAD_res$pathway
+#select significantly upregulated genes 
+leading_edge_hermann_up = leading_edge_hermann_a[which(gsea_LUAD_res$padj <= 0.05 & gsea_LUAD_res$NES > 0)]
+#print(leading_edge_hermann_up)
+#select significantly downregulated genes
+leading_edge_hermann_down = leading_edge_hermann_a[which(gsea_LUAD_res$padj <= 0.05 & gsea_LUAD_res$NES < 0)]
+#print(leading_edge_hermann_down)
+```
+
+Lookig for interesting pathways:
+```{r}
+#BiocManager::install("clusterProfiler", version = "3.18")
+#BiocManager::install("pathview")
+#BiocManager::install("enrichplot")
+
+library(clusterProfiler)
+library(enrichplot)
+library(org.Hs.eg.db)
+```
+
+
+```{r}
+big_vector_leading_edge_hermann_up= unlist(leading_edge_hermann_up, use.names = F)
+
+organism = "org.Hs.eg.db"
+
+# getting gene ID from gene names 
+up_table_leading_hermann_names_big_vector = getBM(filters = "external_gene_name", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = big_vector_leading_edge_hermann_up, 
+                     mart = ensembl)
+# Pathway-Analysis
+leading_edge_hermann_up_plot = enrichGO(gene = up_table_leading_hermann_names_big_vector$ensembl_gene_id,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(leading_edge_hermann_up_plot)
+```
+
+```{r}
+big_vector_leading_edge_hermann_down= unlist(leading_edge_hermann_down, use.names = F)
+
+organism = "org.Hs.eg.db"
+
+# getting gene ID from gene names 
+down_table_leading_hermann_names_big_vector = getBM(filters = "external_gene_name", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = big_vector_leading_edge_hermann_down, 
+                     mart = ensembl)
+# Pathway-Analysis
+leading_edge_hermann_down_plot = enrichGO(gene = down_table_leading_hermann_names_big_vector$ensembl_gene_id,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(leading_edge_hermann_down_plot)
+```
+
+
+Experiment with msigdb data sets (hallmarks):
+```{r}
+library("dplyr")
+library("msigdbr")
+library("tidyverse")
+H = msigdbr(species = "Homo sapiens", category = "H")
+str(H)
+
+#class(hallmark_gene_sets)
+#we need to reformat the msigdbr output into a list of vectors (gene sets) with the corresponding genes in them
+
+#very important code for GSEA with msigdb
+H.genesymbols.ls = H %>%
+  dplyr::select(gs_name, gene_symbol) %>%
+  group_by(gs_name) %>%
+  summarise(all.genes = list(unique(gene_symbol))) %>%
+  deframe()
+#GSEA on the msigdb gene sets
+fgsea_res_msigdb = fgseaSimple(pathways = H.genesymbols.ls,
+                         stats = fold_change_ranked_list_gn,
+                         nperm = 10000,
+                         minSize = 1,
+                         maxSize = length(fold_change_ranked_list_gn) - 1)
+```
+
+Plotting the results:
+```{r}
+# Plot GSEA results using barplot
+barplot(fgsea_res_msigdb$NES, 
+        names.arg = fgsea_res_msigdb$pathway, 
+        las = 2,
+        cex.names = 0.3,
+        col = ifelse(fgsea_res_msigdb$padj < 0.05, "red", "gray"),
+        main = "GSEA Results",
+        xlab = "Pathway",
+        ylab = "Normalized Enrichment Score (NES)",
+)
+```
+Now similar to above I will select the leading edge genes from all significantly down- or upregulated pathways:
+```{r}
+leading_edge_msigdb_a = gsea_LUAD_res$leadingEdge
+#print(leading_edge_msigdb_a)
+names(leading_edge_msigdb_a) = gsea_LUAD_res$pathway
+#select significantly upregulated genes 
+leading_edge_msigdb_up = leading_edge_msigdb_a[which(fgsea_res_msigdb$padj <= 0.05 & fgsea_res_msigdb$NES > 0)]
+#print(leading_edge_hermann_up)
+#select significantly downregulated genes
+leading_edge_msigdb_down = leading_edge_msigdb_a[which(fgsea_res_msigdb$padj <= 0.05 & fgsea_res_msigdb$NES < 0)]
+#print(leading_edge_msigdb_down)
+```
+
+Looking for interesting pathways: 
+```{r}
+big_vector_leading_edge_msigdb_up = unlist(leading_edge_msigdb_up, use.names = F)
+
+organism = "org.Hs.eg.db"
+
+# getting gene ID from gene names 
+up_table_leading_msigdb_names_big_vector = getBM(filters = "external_gene_name", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = big_vector_leading_edge_msigdb_up, 
+                     mart = ensembl)
+# Pathway-Analysis
+leading_edge_msigdb_up_plot = enrichGO(gene = up_table_leading_msigdb_names_big_vector$ensembl_gene_id,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(leading_edge_msigdb_up_plot)
+```
+
+```{r}
+big_vector_leading_edge_msigdb_down = unlist(leading_edge_msigdb_down, use.names = F)
+
+organism = "org.Hs.eg.db"
+
+# getting gene ID from gene names 
+down_table_leading_msigdb_names_big_vector = getBM(filters = "external_gene_name", 
+                     attributes = c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype"), 
+                     values = big_vector_leading_edge_msigdb_down, 
+                     mart = ensembl)
+# Pathway-Analysis
+leading_edge_msigdb_down_plot = enrichGO(gene = down_table_leading_msigdb_names_big_vector$ensembl_gene_id,
+               OrgDb = organism,
+               keyType = "ENSEMBL",
+               ont = "BP",
+               pvalueCutoff = 0.05)
+
+dotplot(leading_edge_msigdb_down_plot)
+```
+
+
+Import fold change data frame:
+```{r}
+#fold_change_df = t(do.call(cbind, FoldChange))
+#fold_change_df = as.data.frame(fold_change_df)
+#gene_ids_GSEA = rownames(fold_change_df)
+#fold_change_df2 = cbind(gene_ids_GSEA, fold_change_df)
+```
+Ranking of fold change frame:
+```{r}
+#V1_sort = fold_change_df2[order(-fold_change_df2$V1), ]
+```
+Alternative (returns large numeric with ordered gene ids):
+```{r}
+#fold_change_df_alt = df_FoldChange_ohne_NA$V1
+#names(fold_change_df_alt) = rownames(df_FoldChange_ohne_NA)
+
+#V1_sort_alt = fold_change_df_alt[order(-fold_change_df)]
+```

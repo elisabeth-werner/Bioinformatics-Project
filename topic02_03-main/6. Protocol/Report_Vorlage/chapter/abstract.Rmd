@@ -1,0 +1,11 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+\renewcommand\abstractname{\Large Abstract}
+\begin{abstract}
+Lung adenocarcinoma (LUAD) is a predominant form of lung cancer characterized by poor survival rates due to late-stage diagnoses and complex genetic and epigenetic heterogeneity (Siegel \textit{et. al}, 2023; TCGA, 2014). This project aims to elucidate the molecular features of LUAD which drive cancer progression and formation, as well as differentiate LUAD from lung squamous cell carcinoma (LUSC). Utilizing RNA sequencing data from The Cancer Genome Atlas (TCGA), shortened to protein encoding genes, we performed Gene Set Enrichment Analysis (GSEA) and Gene Set Variation Analysis (GSVA) on LUAD patient samples and pan-caner data. These analyses revealed enrichment in hallmark pathways such as angiogenesis, proliferation, and apoptosis across LUAD samples. However, individual patients exhibited unique oncogenic signature enrichments without distinct clustering when visualized using Uniform Manifold Approximation and Projection (UMAP), indicating significant heterogeneity, which might arise due to several molecular mechanisms.\newline
+In contrast, our GSVA of pan-cancer data demonstrated distinct clustering of different cancer types, highlighting pathway-specific regulatory patterns. Further, logistic regression analysis identified 13 key pathways that effectively distinguish LUAD from LUSC, achieving an accuracy of 92.6\% and an area under the curve (AUC) of 0.9779. This analysis underscores the need for personalized therapeutic approaches in LUAD treatment due to the diverse genetic, epigenetic, and microenvironmental factors influencing tumor biology. Overall, our findings contribute to a deeper understanding of LUAD’s molecular landscape and supports the development of targeted diagnostic and treatment strategies.
+\end{abstract}
+
